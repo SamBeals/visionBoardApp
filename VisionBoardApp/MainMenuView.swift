@@ -1,6 +1,11 @@
 import SwiftUI
 
 struct MainMenuView: View {
+    let userId: String   // ← add this stored property
+
+    init(userId: String) {
+        self.userId = userId
+    }
     var body: some View {
         NavigationStack {
             VStack(spacing: 30) {
@@ -11,7 +16,8 @@ struct MainMenuView: View {
                     .padding(.top)
 
                 // 📸 Habit Tracker Button
-                NavigationLink(destination: HabitTrackerView()) {
+                // In MainMenuView
+                NavigationLink(destination: HabitsHome(userId: userId)) {
                     MenuButtonView(title: "Habit Tracker", emoji: "📸")
                 }
 
@@ -56,4 +62,8 @@ struct MenuButtonView: View {
         .cornerRadius(12)
         .shadow(radius: 2)
     }
+}
+
+#Preview {
+    MainMenuView(userId: "preview-uid")
 }

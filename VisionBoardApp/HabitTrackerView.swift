@@ -1,11 +1,3 @@
-//
-//  HabitTrackerView.swift
-//  VisionBoardApp
-//
-//  Created by Sam Beals on 8/3/25.
-//
-
-
 import SwiftUI
 import PhotosUI
 import Firebase

@@ -18,13 +18,13 @@ struct VisionBoardApp: App {
     // Initialize Firebase as soon as the app launches
     init() {
         FirebaseApp.configure()
-        signInAnonymouslyIfNeeded()
+        var body: some Scene { WindowGroup { AppRouter() } }
     }
 
     
     var body: some Scene {
       WindowGroup {
-        MainMenuView()
+          AppRouter() // ← this decides when to show MainMenuView(userId:)
       }
     }
 }
