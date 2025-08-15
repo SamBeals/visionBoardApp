@@ -1,156 +1,152 @@
+// ToDoListView.swift
 import SwiftUI
-import Firebase
 import FirebaseFirestore
-import FirebaseAuth
 
-struct ToDoListView: View {
-    @State private var selectedScope = "Daily"
-    @State private var newTaskText = ""
-    @State private var tasks: [ToDoTask] = []
+struct TodoItem: Identifiable, Hashable {
+    let id: String
+    let title: String
+    let createdAt: Date
+    let doneOn: String?
+}
 
-    private let scopes = ["Daily", "Weekly", "Monthly"]
-    private var uid: String? { Auth.auth().currentUser?.uid }
+@MainActor
+final class ToDoListVM: ObservableObject {
+    @Published var items: [TodoItem] = []
+    private var listener: ListenerRegistration?
 
-    var body: some View {
-        VStack {
-            Text("To-Do List")
-                .font(.largeTitle)
-                .bold()
-                .padding(.top)
+    func start(userId: String) {
+        listener?.remove()
+        let ref = Firestore.firestore()
+            .collection("users").document(userId)
+            .collection("todos")
+            .order(by: "createdAt", descending: false)
 
-            // Scope selector (daily, weekly, monthly)
-            Picker("Scope", selection: $selectedScope) {
-                ForEach(scopes, id: \.self) { scope in
-                    Text(scope)
-                }
+        listener = ref.addSnapshotListener { [weak self] snap, err in
+            guard err == nil, let docs = snap?.documents else { self?.items = []; return }
+            self?.items = docs.compactMap { d in
+                let data = d.data()
+                guard let title = data["title"] as? String else { return nil }
+                let createdAt = (data["createdAt"] as? Timestamp)?.dateValue()
+                    ?? (data["createdAt"] as? Date) ?? Date()
+                let doneOn = data["doneOn"] as? String
+                return TodoItem(id: d.documentID, title: title, createdAt: createdAt, doneOn: doneOn)
             }
-            .pickerStyle(SegmentedPickerStyle())
-            .padding()
-
-            if !tasks.isEmpty {
-                VStack {
-                    ProgressView(value: progress)
-                        .progressViewStyle(.linear)
-                        .tint(.green)
-
-                    Text("\(completedCount) of \(tasks.count) completed")
-                        .font(.caption)
-                        .foregroundColor(.gray)
-                }
-                .padding(.horizontal)
-            }
-            
-            List {
-                ForEach(tasks) { task in
-                    HStack {
-                        Button(action: {
-                            toggleTaskCompletion(task)
-                        }) {
-                            Image(systemName: task.completed ? "checkmark.circle.fill" : "circle")
-                        }
-                        .buttonStyle(.plain)
-
-                        Text(task.text)
-                            .strikethrough(task.completed)
-                    }
-                }
-                .onDelete(perform: deleteTasks)
-            }
-
-
-            // Add new task input
-            HStack {
-                TextField("New \(selectedScope) Task", text: $newTaskText)
-                    .textFieldStyle(.roundedBorder)
-                Button("Add") {
-                    addTask()
-                }
-                .disabled(newTaskText.isEmpty)
-            }
-            .padding()
-
-            Spacer()
-        }
-        .onAppear {
-            fetchTasks()
-        }
-        .onChange(of: selectedScope) { _ in
-            fetchTasks()
-        }
-        .padding()
-    }
-
-    func fetchTasks() {
-        guard let uid = uid else { return }
-
-        Firestore.firestore()
-            .collection("todo")
-            .whereField("userId", isEqualTo: uid)
-            .whereField("scope", isEqualTo: selectedScope)
-            .order(by: "timestamp", descending: false)
-            .getDocuments { snapshot, error in
-                if let docs = snapshot?.documents {
-                    self.tasks = docs.map { doc in
-                        ToDoTask(
-                            id: doc.documentID,
-                            text: doc["text"] as? String ?? "",
-                            completed: doc["completed"] as? Bool ?? false,
-                            scope: doc["scope"] as? String ?? "Daily"
-                        )
-                    }
-                } else {
-                    print("⚠️ Failed to fetch tasks: \(error?.localizedDescription ?? "Unknown error")")
-                }
-            }
-    }
-
-    func addTask() {
-        guard let uid = uid else { return }
-        let taskData: [String: Any] = [
-            "userId": uid,
-            "text": newTaskText,
-            "completed": false,
-            "scope": selectedScope,
-            "timestamp": Timestamp(date: Date())
-        ]
-        Firestore.firestore().collection("todo").addDocument(data: taskData) { _ in
-            newTaskText = ""
-            fetchTasks()
         }
     }
 
-    func toggleTaskCompletion(_ task: ToDoTask) {
-        Firestore.firestore().collection("todo").document(task.id).updateData([
-            "completed": !task.completed
-        ]) { _ in
-            fetchTasks()
-        }
-    }
-    
-    // MARK: - Task Model
-    struct ToDoTask: Identifiable {
-        let id: String
-        let text: String
-        let completed: Bool
-        let scope: String
+    func stop() { listener?.remove(); listener = nil }
+
+    func add(userId: String, title: String) async {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let ref = Firestore.firestore()
+            .collection("users").document(userId)
+            .collection("todos").document()
+        try? await ref.setData([
+            "title": trimmed,
+            "createdAt": Date()
+        ])
     }
 
-    func deleteTasks(at offsets: IndexSet) {
-        for index in offsets {
-            let task = tasks[index]
-            Firestore.firestore().collection("todo").document(task.id).delete()
+    func setDone(userId: String, item: TodoItem, isDoneToday: Bool) async {
+        let ref = Firestore.firestore()
+            .collection("users").document(userId)
+            .collection("todos").document(item.id)
+        let today = Self.todayKey()
+        if isDoneToday {
+            try? await ref.updateData(["doneOn": today])
+        } else {
+            try? await ref.updateData(["doneOn": FieldValue.delete()])
         }
-        tasks.remove(atOffsets: offsets)
-    }
-    
-    var completedCount: Int {
-        tasks.filter { $0.completed }.count
     }
 
-    var progress: Double {
-        guard !tasks.isEmpty else { return 0 }
-        return Double(completedCount) / Double(tasks.count)
+    static func todayKey() -> String {
+        let f = DateFormatter()
+        f.calendar = .current; f.locale = .current; f.timeZone = .current
+        f.dateFormat = "yyyy-MM-dd"
+        return f.string(from: Date())
     }
 }
 
+struct ToDoListView: View {
+    let userId: String                      // ← require UID
+    @StateObject private var vm = ToDoListVM()
+    @State private var newTitle = ""
 
+    var body: some View {
+        NavigationStack {
+            VStack {
+                HStack {
+                    TextField("New to-do", text: $newTitle)
+                        .textInputAutocapitalization(.sentences)
+                        .disableAutocorrection(true)
+                        .textFieldStyle(.roundedBorder)
+                        .submitLabel(.done)
+                        .onSubmit { add() }
+
+                    Button("Add") { add() }
+                        .disabled(newTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) // ← only text check
+                }
+                .padding()
+
+                if vm.items.isEmpty {
+                    VStack(spacing: 8) {
+                        Text("No to-dos yet").font(.headline).foregroundStyle(.secondary)
+                        Text("Add something you want to get done today.")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    List {
+                        ForEach(vm.items) { item in
+                            TodoRow(
+                                item: item,
+                                isDoneToday: item.doneOn == ToDoListVM.todayKey(),
+                                toggle: { checked in
+                                    Task { await vm.setDone(userId: userId, item: item, isDoneToday: checked) }
+                                }
+                            )
+                        }
+                    }
+                    .listStyle(.plain)
+                }
+            }
+            .navigationTitle("To-Do")
+        }
+        .onAppear { vm.start(userId: userId) }
+        .onDisappear { vm.stop() }
+    }
+
+    private func add() {
+        let title = newTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty else { return }
+        Task { await vm.add(userId: userId, title: title) }
+        newTitle = ""
+    }
+}
+
+private struct TodoRow: View {
+    let item: TodoItem
+    let isDoneToday: Bool
+    let toggle: (Bool) -> Void
+
+    var body: some View {
+        HStack {
+            Button { toggle(!isDoneToday) } label: {
+                Image(systemName: isDoneToday ? "checkmark.circle.fill" : "circle")
+                    .imageScale(.large)
+            }
+            .buttonStyle(.plain)
+
+            Text(item.title)
+                .strikethrough(isDoneToday, color: .secondary)
+                .foregroundStyle(isDoneToday ? .secondary : .primary)
+
+            Spacer()
+            Text(item.createdAt, style: .date)
+                .font(.caption).foregroundStyle(.secondary)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { toggle(!isDoneToday) }
+    }
+}

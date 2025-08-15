@@ -17,12 +17,11 @@ struct MainMenuView: View {
 
                 // 📸 Habit Tracker Button
                 // In MainMenuView
-                NavigationLink(destination: HabitsHome(userId: userId)) {
+                NavigationLink(destination: HabitsListView(userId: userId)) {
                     MenuButtonView(title: "Habit Tracker", emoji: "📸")
                 }
-
                 // ✅ To-Do List Button
-                NavigationLink(destination: ToDoListView()) {
+                NavigationLink(destination: ToDoListView(userId: userId)) {
                     MenuButtonView(title: "To-Do List", emoji: "✅")
                 }
 
