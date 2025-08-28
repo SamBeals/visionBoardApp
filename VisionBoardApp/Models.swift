@@ -6,3 +6,11 @@ struct UploadedImage: Identifiable {
     var type: String
 }
 
+struct Habit: Identifiable, Hashable {
+    let id: String
+    let name: String
+    let createdAt: Date
+    var photoUrl: String?   // ← new, optional proof photo
+
+}
+

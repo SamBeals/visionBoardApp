@@ -1,4 +1,3 @@
-// HabitsHome.swift
 import SwiftUI
 import FirebaseFirestore
 
@@ -7,10 +6,10 @@ final class HabitsListVM: ObservableObject {
     @Published var habits: [Habit] = []
     private var listener: ListenerRegistration?
 
-    func start(userId: String) {
+    func start() {
         listener?.remove()
         let ref = Firestore.firestore()
-            .collection("users").document(userId)
+            .collection("users").document(UserSessionHelper.userId)
             .collection("habits")
             .order(by: "createdAt", descending: true)
 
@@ -29,12 +28,26 @@ final class HabitsListVM: ObservableObject {
         }
     }
 
-    func stop() { listener?.remove(); listener = nil }
+    func stop() {
+        listener?.remove()
+        listener = nil
+    }
 
-    func addHabit(userId: String, name: String) async {
+    func addHabit(name: String) async {
         let ref = Firestore.firestore()
-            .collection("users").document(userId)
+            .collection("users").document(UserSessionHelper.userId)
             .collection("habits").document()
-        try? await ref.setData(["name": name, "createdAt": Date()])
+        try? await ref.setData([
+            "name": name,
+            "createdAt": Date()
+        ])
+    }
+    func deleteHabit(habit: Habit) async {
+        let ref = Firestore.firestore()
+            .collection("users").document(UserSessionHelper.userId)
+            .collection("habits").document(habit.id)
+        try? await ref.delete()
     }
 }
+
+

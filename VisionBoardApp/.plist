@@ -13,7 +13,7 @@
 	<key>PROJECT_ID</key>
 	<string>visionboardapp-4fa46</string>
 	<key>STORAGE_BUCKET</key>
-	<string>visionboardapp-4fa46.firebasestorage.app</string>
+	<string>visionboardapp-4fa46.appspot.com</string>
 	<key>IS_ADS_ENABLED</key>
 	<false></false>
 	<key>IS_ANALYTICS_ENABLED</key>

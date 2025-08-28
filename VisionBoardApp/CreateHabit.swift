@@ -2,15 +2,12 @@ import FirebaseFirestore
 import FirebaseAuth
 
 func createHabit(named name: String, completion: @escaping (Error?) -> Void) {
-    guard let userID = Auth.auth().currentUser?.uid else {
-        print("No user signed in.")
-        completion(NSError(domain: "", code: 401, userInfo: [NSLocalizedDescriptionKey: "User not signed in"]))
-        return
-    }
+    let userId = UserSessionHelper.userId
+
 
     let db = Firestore.firestore()
     let habitRef = db.collection("users")
-        .document(userID)
+        .document(userId)
         .collection("habits")
         .document() // auto-ID
 

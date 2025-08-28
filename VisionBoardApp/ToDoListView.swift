@@ -1,4 +1,3 @@
-// ToDoListView.swift
 import SwiftUI
 import FirebaseFirestore
 
@@ -60,6 +59,14 @@ final class ToDoListVM: ObservableObject {
         }
     }
 
+    // 🚨 NEW: delete function
+    func delete(userId: String, item: TodoItem) async {
+        let ref = Firestore.firestore()
+            .collection("users").document(userId)
+            .collection("todos").document(item.id)
+        try? await ref.delete()
+    }
+
     static func todayKey() -> String {
         let f = DateFormatter()
         f.calendar = .current; f.locale = .current; f.timeZone = .current
@@ -69,7 +76,7 @@ final class ToDoListVM: ObservableObject {
 }
 
 struct ToDoListView: View {
-    let userId: String                      // ← require UID
+    let userId: String
     @StateObject private var vm = ToDoListVM()
     @State private var newTitle = ""
 
@@ -85,7 +92,7 @@ struct ToDoListView: View {
                         .onSubmit { add() }
 
                     Button("Add") { add() }
-                        .disabled(newTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) // ← only text check
+                        .disabled(newTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
                 .padding()
 
@@ -106,6 +113,13 @@ struct ToDoListView: View {
                                     Task { await vm.setDone(userId: userId, item: item, isDoneToday: checked) }
                                 }
                             )
+                        }
+                        // 🚨 NEW: swipe-to-delete support
+                        .onDelete { indexSet in
+                            for index in indexSet {
+                                let item = vm.items[index]
+                                Task { await vm.delete(userId: userId, item: item) }
+                            }
                         }
                     }
                     .listStyle(.plain)

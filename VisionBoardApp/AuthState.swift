@@ -25,7 +25,7 @@ struct AppRouter: View {
     var body: some View {
         Group {
             if let user = auth.user {
-                MainMenuView(userId: user.uid)
+                MainMenuView()
             } else {
                 ProgressView("Loading…")
                     .task { await auth.ensureAnonymous() }
